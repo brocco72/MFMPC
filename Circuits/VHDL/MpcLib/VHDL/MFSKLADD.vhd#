@@ -1,0 +1,321 @@
+-- =============================================================================
+--                     This confidential and proprietary code
+--                       may be used only as authorized by a
+--                         licensing agreement from
+--                     KU Leuven, ESAT Department, COSIC Group
+--                    https://securewww.esat.kuleuven.be/cosic/
+--                        _____  ____    ____   ____  _____
+--                       / ___/ / __ \  / __/  /  _/ / ___/
+--                      / /__  / /_/ / _\ \   _/ /  / /__
+--                      \___/  \____/ /___/  /___/  \___/
+--
+--                              ALL RIGHTS RESERVED
+--        The entire notice above must be reproduced on all authorized copies.
+-- =============================================================================
+-- File name     : MFSKLADD.vhd
+-- Time created  : Fri Jan 24 14:22:34 2020
+-- Author        : Danilo Sijacic (dsijacic@esat.kuleuven.be)
+-- Details       : Multi Fanin Sklansky Adder for MPC
+--               :
+-- =============================================================================
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity PG is
+port (
+    A, B : in std_logic;
+    P, G : out std_logic
+);
+end entity;
+
+architecture behavioral of PG is
+begin
+    P <= A xor B;
+    G <= A and B;
+end architecture ; -- behavioral
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity DOT2 is
+port (
+    P1, G1, P2, G2 : in std_logic;
+    P, G : out std_logic
+);
+end entity;
+
+architecture behavioral of DOT2 is
+begin
+    P <= P1 and P2;
+    G <= G2 xor (P2 and G1);
+end architecture ; -- behavioral
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity DOT3 is
+port (
+    P1, G1, P2, G2, P3, G3 : in std_logic;
+    P, G : out std_logic
+);
+end entity;
+
+architecture behavioral of DOT3 is
+begin
+    P <= P1 and P2 and P3;
+    G <= G3 xor (P3 and G2) xor (P3 and P2 and G1);
+end architecture ; -- behavioral
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity DOT4 is
+port (
+    P1, G1, P2, G2, P3, G3, P4, G4 : in std_logic;
+    P, G : out std_logic
+);
+end entity;
+
+architecture behavioral of DOT4 is
+begin
+    P <= P1 and P2 and P3 and P4;
+    G <= G4 xor (P4 and G3) xor ((P4 and P3) and G2) xor (P4 and P3 and P2 and G1);
+end architecture ; -- behavioral
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity GDOT2 is
+port (
+    G1, P2, G2 : in std_logic;
+    G : out std_logic
+);
+end entity;
+
+architecture behavioral of GDOT2 is
+begin
+    G <= G2 xor (P2 and G1);
+end architecture ; -- behavioral
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity GDOT3 is
+port (
+    G1, P2, G2, P3, G3 : in std_logic;
+    G : out std_logic
+);
+end entity;
+
+architecture behavioral of GDOT3 is
+begin
+    G <= G3 xor (P3 and G2) xor (P3 and P2 and G1);
+end architecture ; -- behavioral
+
+library ieee;
+use ieee.std_logic_1164.all;
+
+entity GDOT4 is
+port (
+    G1, P2, G2, P3, G3, P4, G4 : in std_logic;
+    G : out std_logic
+);
+end entity;
+
+architecture behavioral of GDOT4 is
+begin
+    G <= G4 xor (P4 and G3) xor (P4 and P3 and G2) xor (P4 and P3 and P2 and G1);
+end architecture ; -- behavioral
+
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+use IEEE.MATH_REAL.ALL;
+
+entity MFSKLADD is
+generic (
+    gWordSize : natural
+);
+port (
+    A : in std_logic_vector(gWordSize - 1 downto 0);
+    B : in std_logic_vector(gWordSize - 1 downto 0);
+    S : out std_logic_vector(gWordSize - 1 downto 0)
+);
+end entity ; -- MFSKLADD
+
+architecture structural of MFSKLADD is
+
+    component PG is
+    port (
+        A, B : in std_logic;
+        P, G : out std_logic
+    );
+    end component;
+
+    component DOT2 is
+    port (
+        P1, G1, P2, G2 : in std_logic;
+        P, G : out std_logic
+    );
+    end component;
+
+    component DOT3 is
+        port (
+            P1, G1, P2, G2, P3, G3 : in std_logic;
+            P, G : out std_logic
+        );
+    end component;
+
+    component DOT4 is
+        port (
+            P1, G1, P2, G2, P3, G3, P4, G4 : in std_logic;
+            P, G : out std_logic
+        );
+    end component;
+
+    component GDOT2 is
+        port (
+            G1, P2, G2 : in std_logic;
+            G : out std_logic
+        );
+    end component;
+
+    component GDOT3 is
+        port (
+            G1, P2, G2, P3, G3 : in std_logic;
+            G : out std_logic
+        );
+    end component;
+
+    component GDOT4 is
+        port (
+            G1, P2, G2, P3, G3, P4, G4 : in std_logic;
+            G : out std_logic
+        );
+    end component;
+
+    constant depth : integer := INTEGER(CEIL(LOG(REAL(4), REAL(gWordSize))));
+
+    type signal_vector is array (depth downto 0) of std_logic_vector(gWordSize - 1 downto 0);
+
+    signal P : signal_vector;
+    signal G : signal_vector;
+
+
+begin
+
+    -- first layer
+    pgLayer : for i in 0 to gWordSize - 1 generate
+        prGen : PG port map (
+            A   => A(i),
+            B   => B(i),
+            P   => P(0)(i),
+            G   => G(0)(i)
+        );
+    end generate ; -- prLayer
+
+    -- prefix layer
+    row : for i in 1 to depth generate
+         column : for j in 0 to gWordSize - 1 generate
+         --if a component is needed put it, else forward the P and G signals
+
+            a : if j < 4**(i) generate
+
+                c_0 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 0 generate
+                    P(i)(j) <= P(i-1)(j);
+                    G(i)(j) <= G(i-1)(j);
+                end generate; -- c_0
+
+                c_1 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 1 generate
+                    gDOT2_0 : GDOT2 port map(
+                        G1 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        P2 => P(i-1)(j),
+                        G2 => G(i-1)(j),
+                        G => G(i)(j)
+                    );
+                end generate; -- c_1
+
+                c_2 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 2 generate
+                    gDOT3_0 : GDOT3 port map(
+                        G1 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 1) * (4**(i-1)) - 1),
+                        P2 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        G2 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        P3 => P(i-1)(j),
+                        G3 => G(i-1)(j),
+                        G => G(i)(j)
+                    );
+                end generate; -- c_2
+
+                c_3 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 3 generate
+                    gDOT4_0 : GDOT4 port map(
+                        G1 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 2) * (4**(i-1)) - 1),
+                        P2 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 1) * (4**(i-1)) - 1),
+                        G2 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 1) * (4**(i-1)) - 1),
+                        P3 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        G3 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        P4 => P(i-1)(j),
+                        G4 => G(i-1)(j),
+                        G => G(i)(j)
+                    );
+                end generate; -- c_3
+
+            end generate; -- a
+
+            b : if j >= 4**(i) generate
+
+                d_0 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 0 generate
+                    P(i)(j) <= P(i-1)(j);
+                    G(i)(j) <= G(i-1)(j);
+                end generate; -- d_0
+
+                d_1 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 1 generate
+                    DOT2_0 : DOT2 port map(
+                        P1 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        G1 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        P2 => P(i-1)(j),
+                        G2 => G(i-1)(j),
+                        P => P(i)(j),
+                        G => G(i)(j)
+                    );
+                end generate; -- d_1
+
+                d_2 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 2 generate
+                    DOT3_0 : DOT3 port map(
+                        P1 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 1) * (4**(i-1)) - 1),
+                        G1 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 1) * (4**(i-1)) - 1),
+                        P2 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        G2 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        P3 => P(i-1)(j),
+                        G3 => G(i-1)(j),
+                        P => P(i)(j),
+                        G => G(i)(j)
+                    );
+                end generate; -- d_2
+
+                d_3 : if ((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) mod 4) = 3 generate
+                    DOT4_0 : DOT4 port map(
+                        P1 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 2) * (4**(i-1)) - 1),
+                        G1 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 2) * (4**(i-1)) - 1),
+                        P2 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 1) * (4**(i-1)) - 1),
+                        G2 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1)))) - 1) * (4**(i-1)) - 1),
+                        P3 => P(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        G3 => G(i-1)((INTEGER(FLOOR(REAL(j)/REAL(4**(i-1))))) * (4**(i-1)) - 1),
+                        P4 => P(i-1)(j),
+                        G4 => G(i-1)(j),
+                        P => P(i)(j),
+                        G => G(i)(j)
+                    );
+                end generate; -- d_3
+
+            end generate ; -- b
+        end generate; -- column
+    end generate; -- row
+
+    -- final layer
+    S(0) <= P(0)(0);
+    f_row : for i in 1 to gWordSize - 1 generate
+        S(i) <= G(depth)(i-1) xor P(0)(i);
+    end generate; -- f_row
+
+end architecture ; -- structural
